@@ -303,8 +303,8 @@ fn main() {
         Aimed {aimer: Bob, target: Alice, weapon: Gun},
     ];
     let filter = vec![];
-    let after_constraints = vec![];
-    match solve_and_reduce(&start, &goal, &filter, &after_constraints, infer) {
+    let order_constraints = vec![];
+    match solve_and_reduce(&start, &goal, &filter, &order_constraints, infer) {
         Ok(solution) => {
             // for expr in solution.iter().rev() {
             for expr in solution {

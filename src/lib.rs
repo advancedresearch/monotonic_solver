@@ -1,19 +1,20 @@
 #![deny(missing_docs)]
 
 //! A monotonic solver designed to be easy to use with Rust enums.
-//! 
+//!
 //! This can be used to:
 //!
 //! - Research modeling of common sense for artificial intelligence
 //! - Test inference rules when studying logic and languages
 //! - Generate story plots
+//! - Search and extract data
 //!
 //! The advantage of this library design is the ease-of-use for prototyping.
 //! In a few hours, one can test a new idea for modeling common sense.
 //!
 //! Here is an example of program output (from "examples/drama.rs"):
 //!
-//! ```
+//! ```ignore
 //! Bob murdered Alice with a gun
 //! Bob shot Alice with a gun
 //! Bob pulled the trigger of the gun
@@ -82,7 +83,7 @@
 //! 1. A list of start facts.
 //! 2. A list of goal facts.
 //! 3. A list of filtered facts.
-//! 4. A list of after-constraints.
+//! 4. A list of order-constraints.
 //! 5. A function pointer to the inference algorithm.
 //!
 //! Start facts are the initial conditions that trigger the search through rules.
@@ -92,14 +93,23 @@
 //! Filtered facts are blocked from being added to the solution.
 //! This can be used as feedback to the algorithm when a wrong assumption is made.
 //!
-//! After-constraints is used when facts represents events.
+//! Order-constraints are used when facts represents events.
 //! It is a list of tuples of the form `(A, B)` which controls the ordering of events.
 //! The event `B` is added to the internal filter temporarily until event `A`
 //! has happened.
 //!
+//! The search requires 6 things (similar to solver except no goal is required):
+//!
+//! 1. A list of start facts.
+//! 2. A matching pattern to extract data.
+//! 3. A maximum size of proof to avoid running out of memory.
+//! 4. A list of filtered facts.
+//! 5. A list of order-constraints.
+//! 6. A function pointer to the inference algorithm.
+//!
 //! It is common to set up the inference algorithm in this pattern:
 //!
-//! ```rust
+//! ```ignore
 //! fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
 //!     let can_add = |new_expr: &Expr| {
 //!         !cache.contains(new_expr) &&
@@ -131,7 +141,6 @@
 //! It is also common to create lists of items to iterate over,
 //! and use it in combination with the cache to improve performance of lookups.
 
-
 use std::hash::Hash;
 use std::collections::HashSet;
 
@@ -140,7 +149,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
     start: &[T],
     goal: &[T],
     filter: &[T],
-    after_constraints: &[(T, T)],
+    order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
 ) -> Result<Vec<T>, Vec<T>> {
     let mut cache = HashSet::new();
@@ -157,15 +166,15 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
             break;
         }
 
-        // Modify filter to prevent violating of after-constraints.
+        // Modify filter to prevent violating of order-constraints.
         let mut added_to_filter = vec![];
-        for (i, &(ref a, ref b)) in after_constraints.iter().enumerate() {
+        for (i, &(ref a, ref b)) in order_constraints.iter().enumerate() {
             if !cache.contains(a) && !filter_cache.contains(b) {
                 added_to_filter.push(i);
             }
         }
         for &i in &added_to_filter {
-            filter_cache.insert(after_constraints[i].1.clone());
+            filter_cache.insert(order_constraints[i].1.clone());
         }
 
         let expr = if let Some(expr) = infer(&cache, &filter_cache, &res) {
@@ -178,7 +187,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
 
         // Revert filter.
         for &i in &added_to_filter {
-            filter_cache.remove(&after_constraints[i].1);
+            filter_cache.remove(&order_constraints[i].1);
         }
     }
     Ok(res)
@@ -189,10 +198,10 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
     start: &[T],
     goal: &[T],
     filter: &[T],
-    after_constraints: &[(T, T)],
+    order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
 ) -> Result<Vec<T>, Vec<T>> {
-    let mut res = solve(start, goal, filter, after_constraints, infer)?;
+    let mut res = solve(start, goal, filter, order_constraints, infer)?;
 
     // Check that every step is necessary.
     let mut new_filter: Vec<T> = filter.into();
@@ -203,7 +212,7 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
 
             new_filter.push(res[i].clone());
 
-            if let Ok(solution) = solve(start, goal, &new_filter, after_constraints, infer) {
+            if let Ok(solution) = solve(start, goal, &new_filter, order_constraints, infer) {
                 if solution.len() < res.len() &&
                    solution.iter().all(|e| res.iter().any(|f| e == f))
                 {
@@ -219,4 +228,68 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
     }
 
     Ok(res)
+}
+
+/// Searches for matches by a pattern.
+///
+/// - `pat` specifies the map and acceptance criteria
+/// - `max_size` specifies the maximum size of proof
+///
+/// Returns `Ok` if all rules where exausted.
+/// Returns `Err` if the maximum size of proof was exceeded.
+pub fn search<T, F, U>(
+    start: &[T],
+    pat: F,
+    max_size: usize,
+    filter: &[T],
+    order_constraints: &[(T, T)],
+    infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
+) -> Result<Vec<U>, Vec<U>>
+    where T: Clone + PartialEq + Eq + Hash,
+          F: Fn(&T) -> Option<U>
+{
+    let mut cache = HashSet::new();
+    for s in start {
+        cache.insert(s.clone());
+    }
+    let mut filter_cache: HashSet<T> = HashSet::new();
+    for f in filter {
+        filter_cache.insert(f.clone());
+    }
+    let mut res: Vec<T> = start.into();
+    let mut matches: Vec<U> = vec![];
+    loop {
+        if res.len() > max_size {break};
+
+        // Modify filter to prevent violating of order-constraints.
+        let mut added_to_filter = vec![];
+        for (i, &(ref a, ref b)) in order_constraints.iter().enumerate() {
+            if !cache.contains(a) && !filter_cache.contains(b) {
+                added_to_filter.push(i);
+            }
+        }
+        for &i in &added_to_filter {
+            filter_cache.insert(order_constraints[i].1.clone());
+        }
+
+        let expr = if let Some(expr) = infer(&cache, &filter_cache, &res) {
+            expr
+        } else {
+            return Ok(matches);
+        };
+        res.push(expr.clone());
+
+        if let Some(val) = (pat)(&expr) {
+            matches.push(val);
+        }
+
+        cache.insert(expr);
+
+        // Revert filter.
+        for &i in &added_to_filter {
+            filter_cache.remove(&order_constraints[i].1);
+        }
+
+    }
+    Err(matches)
 }

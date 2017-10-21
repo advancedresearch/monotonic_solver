@@ -6,6 +6,7 @@ This can be used to:
 - Research modeling of common sense for artificial intelligence
 - Test inference rules when studying logic and languages
 - Generate story plots
+- Search and extract data
 
 The advantage of this library design is the ease-of-use for prototyping.
 In a few hours, one can test a new idea for modeling common sense.
@@ -39,7 +40,7 @@ A monotonic solver is an automatic theorem prover that finds proofs using
 forward-only search. The word "monotonic" means additional facts do not cancel
 the truth value of previously added facts.
 
-This theorem prover is designed to work AST (Abstract Syntax Tree)
+This theorem prover is designed to work on AST (Abstract Syntax Tree)
 described with Rust enums.
 The API is low level to allow precise control over performance,
 by taking advantage of `HashSet` cache for inferred facts and filtering.
@@ -76,12 +77,17 @@ This is why this library focuses on ease-of-use in a way that is familiar to Rus
 
 ### Usage
 
+There are two modes supported by this library: Solving and searching.
+
+- In solving mode, you specify a goal and the solver tries to find a proof.
+- In searching mode, you specify a pattern and extract some data.
+
 The solver requires 5 things:
 
 1. A list of start facts.
 2. A list of goal facts.
 3. A list of filtered facts.
-4. A list of after-constraints.
+4. A list of order-constraints.
 5. A function pointer to the inference algorithm.
 
 Start facts are the initial conditions that trigger the search through rules.
@@ -91,10 +97,19 @@ Goal facts decides when the search terminates.
 Filtered facts are blocked from being added to the solution.
 This can be used as feedback to the algorithm when a wrong assumption is made.
 
-After-constraints is used when facts represents events.
+Order-constraints are used when facts represents events.
 It is a list of tuples of the form `(A, B)` which controls the ordering of events.
 The event `B` is added to the internal filter temporarily until event `A`
 has happened.
+
+The search requires 6 things (similar to solver except no goal is required):
+
+1. A list of start facts.
+2. A matching pattern to extract data.
+3. A maximum size of proof to avoid running out of memory.
+4. A list of filtered facts.
+5. A list of order-constraints.
+6. A function pointer to the inference algorithm.
 
 It is common to set up the inference algorithm in this pattern:
 
