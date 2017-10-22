@@ -112,8 +112,9 @@ fn main() {
     );
     match res {
         Ok(ref res) | Err(ref res) => {
+            println!("{:?} will buy:", person);
             for r in res {
-                println!("{:?}", r);
+                println!("- {:?}", r);
             }
         }
     }
