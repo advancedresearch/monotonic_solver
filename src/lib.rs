@@ -14,7 +14,7 @@
 //!
 //! Here is an example of program output (from "examples/drama.rs"):
 //!
-//! ```ignore
+//! ```text
 //! Bob murdered Alice with a gun
 //! Bob shot Alice with a gun
 //! Bob pulled the trigger of the gun
@@ -27,6 +27,19 @@
 //! You can follow the reasoning step-by-step,
 //! printed out as sentences in natural language or code.
 //!
+//!
+//! When using this story plot for writing, you might do something like this:
+//!
+//! ```text
+//! Bob picked up the gun and aimed it Alice.
+//! "I hate you!" he cried.
+//! "Wait, I can explain..." Alice raised her hands.
+//! A loud bang.
+//! Bob realized in the same moment what he did.
+//! Something he never would believe if anyone had told him as a child.
+//! He was now a murderer.
+//! ```
+//!
 //! This particular program reasons backwards in time to take advantage of monotonic logic.
 //! It helps to avoid explosive combinatorics of possible worlds.
 //!
@@ -34,6 +47,156 @@
 //! to the same goal.
 //! The alternative histories, that do not lead to a goal, are erased when
 //! the solver reduces the proof after finding a solution.
+//!
+//! ### Example
+//!
+//! Here is the full source code of a "examples/groceries.rs" that figures out which fruits
+//! a person will buy from the available food and taste preferences.
+//!
+//! ```rust
+//! extern crate monotonic_solver;
+//!
+//! use monotonic_solver::search;
+//!
+//! use std::collections::HashSet;
+//!
+//! use Expr::*;
+//! use Fruit::*;
+//! use Taste::*;
+//! use Person::*;
+//!
+//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+//! pub enum Person {
+//!     Hannah,
+//!     Peter,
+//!     Clara,
+//! }
+//!
+//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+//! pub enum Taste {
+//!     Sweet,
+//!     Sour,
+//!     Bitter,
+//!     NonSour,
+//! }
+//!
+//! impl Taste {
+//!     fn likes(&self, fruit: Fruit) -> bool {
+//!         *self == Sweet && fruit.is_sweet() ||
+//!         *self == Sour && fruit.is_sour() ||
+//!         *self == Bitter && fruit.is_bitter() ||
+//!         *self == NonSour && !fruit.is_sour()
+//!     }
+//! }
+//!
+//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+//! pub enum Fruit {
+//!     Apple,
+//!     Grape,
+//!     Lemon,
+//!     Orange,
+//! }
+//!
+//! impl Fruit {
+//!     fn is_sweet(&self) -> bool {
+//!         match *self {Orange | Apple => true, Grape | Lemon => false}
+//!     }
+//!
+//!     fn is_sour(&self) -> bool {
+//!         match *self {Lemon | Orange => true, Apple | Grape => false}
+//!     }
+//!
+//!     fn is_bitter(&self) -> bool {
+//!         match *self {Grape | Lemon => true, Apple | Orange => false}
+//!     }
+//! }
+//!
+//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+//! pub enum Expr {
+//!     ForSale(Fruit),
+//!     Preference(Person, Taste, Taste),
+//!     Buy(Person, Fruit),
+//! }
+//!
+//! fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
+//!     let can_add = |new_expr: &Expr| {
+//!         !cache.contains(new_expr) &&
+//!         !filter_cache.contains(new_expr)
+//!     };
+//!     for expr in story {
+//!         if let &Preference(x, taste1, taste2) = expr {
+//!             for expr2 in story {
+//!                 if let &ForSale(y) = expr2 {
+//!                     // Both tastes must be satisfied for the fruit.
+//!                     if taste1.likes(y) && taste2.likes(y) {
+//!                         let new_expr = Buy(x, y);
+//!                         if can_add(&new_expr) {return Some(new_expr)};
+//!                     }
+//!                 }
+//!             }
+//!         }
+//!     }
+//!     None
+//! }
+//!
+//! fn main() {
+//!     let start = vec![
+//!         ForSale(Orange),
+//!         ForSale(Grape),
+//!         ForSale(Apple),
+//!         ForSale(Lemon),
+//!         Preference(Hannah, Sour, Bitter),
+//!         Preference(Peter, Sour, Sweet),
+//!         Preference(Peter, NonSour, Bitter),
+//!         Preference(Clara, NonSour, Sweet),
+//!     ];
+//!     let order_constraints = vec![
+//!         // Peter likes grape better than orange.
+//!         (Buy(Peter, Grape), Buy(Peter, Orange)),
+//!     ];
+//!
+//!     // Look up what this person will buy.
+//!     let person = Peter;
+//!
+//!     let res = search(
+//!         &start,
+//!         |expr| if let &Buy(x, y) = expr {if x == person {Some(y)} else {None}} else {None},
+//!         1000, // max proof size.
+//!         &[],
+//!         &order_constraints,
+//!         infer,
+//!     );
+//!     match res {
+//!         Ok(ref res) | Err(ref res) => {
+//!             for r in res {
+//!                 println!("{:?}", r);
+//!             }
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! When you run this program, it will output:
+//!
+//! ```text
+//! Peter will buy:
+//! - Grape
+//! - Orange
+//! ```
+//!
+//! This is what Peter will buy.
+//!
+//! Notice the following kinds of constraints:
+//!
+//! - People prefer some fruits above others
+//! - A fruit can give multiple tasting experiences
+//! - All tasting experiences must be satisfied for people to buy the fruit
+//! - Not all kinds of fruits are available all the time
+//! - People's preferences are combinations of tasting experiences
+//! - People might change preferences over time
+//!
+//! When you start to code a new idea, you might only know vaguely
+//! what the solver should do. Experiment!
 //!
 //! ### Design
 //!
