@@ -8,6 +8,10 @@ This can be used to:
 - Generate story plots
 - Search and extract data
 
+Blog posts:
+
+- [2017-07-25 New Library for Automated Monotonic Theorem Proving](https://github.com/advancedresearch/advancedresearch.github.io/blob/master/blog/2017-07-25-new-library-for-automated-monotonic-theorem-proving.md)
+
 The advantage of this library design is the ease-of-use for prototyping.
 In a few hours, one can test a new idea for modeling common sense.
 
