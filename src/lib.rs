@@ -311,6 +311,7 @@ use std::collections::HashSet;
 pub fn solve<T: Clone + PartialEq + Eq + Hash>(
     start: &[T],
     goal: &[T],
+    max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
@@ -328,8 +329,11 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
         if goal.iter().all(|e| res.iter().any(|f| e == f)) {
             break;
         }
+        if let Some(n) = max_size {
+            if res.len() >= n {return Err(res)};
+        }
 
-        // Modify filter to prevent violating of order-constraints.
+        // Modify filter to prevent violation of order-constraints.
         let mut added_to_filter = vec![];
         for (i, &(ref a, ref b)) in order_constraints.iter().enumerate() {
             if !cache.contains(a) && !filter_cache.contains(b) {
@@ -360,13 +364,15 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
 pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
     start: &[T],
     goal: &[T],
+    mut max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
 ) -> Result<Vec<T>, Vec<T>> {
-    let mut res = solve(start, goal, filter, order_constraints, infer)?;
+    let mut res = solve(start, goal, max_size, filter, order_constraints, infer)?;
 
     // Check that every step is necessary.
+    max_size = Some(res.len());
     let mut new_filter: Vec<T> = filter.into();
     loop {
         let old_len = res.len();
@@ -375,10 +381,11 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
 
             new_filter.push(res[i].clone());
 
-            if let Ok(solution) = solve(start, goal, &new_filter, order_constraints, infer) {
+            if let Ok(solution) = solve(start, goal, max_size, &new_filter, order_constraints, infer) {
                 if solution.len() < res.len() &&
                    solution.iter().all(|e| res.iter().any(|f| e == f))
                 {
+                    max_size = Some(solution.len());
                     res = solution;
                     break;
                 }
