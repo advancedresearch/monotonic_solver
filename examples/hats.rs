@@ -283,6 +283,7 @@ pub fn check(fs: &[(fn() -> (Vec<Expr>, Vec<Expr>), bool)]) {
         let res = solve(
             &start,
             &goal,
+            None,
             &[],
             &order_constraints,
             infer,
@@ -331,6 +332,7 @@ fn main() {
     let res = solve_and_reduce(
         &start,
         &goal,
+        None,
         &[],
         &order_constraints,
         infer,
