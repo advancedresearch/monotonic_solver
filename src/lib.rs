@@ -1,6 +1,7 @@
 #![deny(missing_docs)]
 
-//! A monotonic solver designed to be easy to use with Rust enums.
+//! # Monotonic-Solver
+//! A monotonic solver designed to be easy to use with Rust enum expressions
 //!
 //! This can be used to:
 //!
@@ -8,6 +9,13 @@
 //! - Test inference rules when studying logic and languages
 //! - Generate story plots
 //! - Search and extract data
+//!
+//! Used in [Avalog](https://github.com/advancedresearch/avalog),
+//! an experimental implementation of Avatar Logic with a Prolog-like syntax.
+//!
+//! Blog posts:
+//!
+//! - [2017-07-25 New Library for Automated Monotonic Theorem Proving](https://github.com/advancedresearch/advancedresearch.github.io/blob/master/blog/2017-07-25-new-library-for-automated-monotonic-theorem-proving.md)
 //!
 //! The advantage of this library design is the ease-of-use for prototyping.
 //! In a few hours, one can test a new idea for modeling common sense.
@@ -20,6 +28,9 @@
 //! Bob pulled the trigger of the gun
 //! Bob aimed the gun at Alice
 //! ```
+//!
+//! This is a program that generates drama story plots.
+//! The solver starts with the ending and work backwards to the beginning.
 //!
 //! - Start: "Bob murdered Alice with a gun"
 //! - Goal: "Bob aimed the gun at Alice".
@@ -161,7 +172,7 @@
 //!     let res = search(
 //!         &start,
 //!         |expr| if let &Buy(x, y) = expr {if x == person {Some(y)} else {None}} else {None},
-//!         1000, // max proof size.
+//!         Some(1000), // max proof size.
 //!         &[],
 //!         &order_constraints,
 //!         infer,
@@ -204,7 +215,7 @@
 //! forward-only search. The word "monotonic" means additional facts do not cancel
 //! the truth value of previously added facts.
 //!
-//! This theorem prover is designed to work AST (Abstract Syntax Tree)
+//! This theorem prover is designed to work on AST (Abstract Syntax Tree)
 //! described with Rust enums.
 //! The API is low level to allow precise control over performance,
 //! by taking advantage of `HashSet` cache for inferred facts and filtering.
@@ -240,6 +251,11 @@
 //! This is why this library focuses on ease-of-use in a way that is familiar to Rust programmers, so multiple designs can be tested and compared with short iteration cycles.
 //!
 //! ### Usage
+//!
+//! There are two modes supported by this library: Solving and searching.
+//!
+//! - In solving mode, you specify a goal and the solver tries to find a proof.
+//! - In searching mode, you specify a pattern and extract some data.
 //!
 //! The solver requires 5 things:
 //!
@@ -410,7 +426,7 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
 pub fn search<T, F, U>(
     start: &[T],
     pat: F,
-    max_size: usize,
+    max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
@@ -429,7 +445,9 @@ pub fn search<T, F, U>(
     let mut res: Vec<T> = start.into();
     let mut matches: Vec<U> = vec![];
     loop {
-        if res.len() > max_size {break};
+        if let Some(n) = max_size {
+            if res.len() >= n {break};
+        }
 
         // Modify filter to prevent violating of order-constraints.
         let mut added_to_filter = vec![];
