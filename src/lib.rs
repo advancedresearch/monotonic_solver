@@ -444,6 +444,13 @@ pub fn search<T, F, U>(
     }
     let mut res: Vec<T> = start.into();
     let mut matches: Vec<U> = vec![];
+
+    for expr in start {
+        if let Some(val) = (pat)(expr) {
+            matches.push(val);
+        }
+    }
+    
     loop {
         if let Some(n) = max_size {
             if res.len() >= n {break};
