@@ -1,4 +1,4 @@
-# monotonic_solver
+# Monotonic-Solver
 A monotonic solver designed to be easy to use with Rust enum expressions
 
 This can be used to:
@@ -7,6 +7,9 @@ This can be used to:
 - Test inference rules when studying logic and languages
 - Generate story plots
 - Search and extract data
+
+Used in [Avalog](https://github.com/advancedresearch/avalog),
+an experimental implementation of Avatar Logic with a Prolog-like syntax.
 
 Blog posts:
 
@@ -17,7 +20,7 @@ In a few hours, one can test a new idea for modeling common sense.
 
 Here is an example of program output (from "examples/drama.rs"):
 
-```ignore
+```text
 Bob murdered Alice with a gun
 Bob shot Alice with a gun
 Bob pulled the trigger of the gun
@@ -33,15 +36,16 @@ The solver starts with the ending and work backwards to the beginning.
 You can follow the reasoning step-by-step,
 printed out as sentences in natural language or code.
 
+
 When using this story plot for writing, you might do something like this:
 
-```ignore
+```text
 Bob picked up the gun and aimed it Alice.
 "I hate you!" he cried.
 "Wait, I can explain..." Alice raised her hands.
 A loud bang.
 Bob realized in the same moment what he did.
-Something he never would believe if anyone had told as a child.
+Something he never would believe if anyone had told him as a child.
 He was now a murderer.
 ```
 
@@ -166,7 +170,7 @@ fn main() {
     let res = search(
         &start,
         |expr| if let &Buy(x, y) = expr {if x == person {Some(y)} else {None}} else {None},
-        1000, // max proof size.
+        Some(1000), // max proof size.
         &[],
         &order_constraints,
         infer,
@@ -183,11 +187,13 @@ fn main() {
 
 When you run this program, it will output:
 
-```
+```text
 Peter will buy:
 - Grape
 - Orange
 ```
+
+This is what Peter will buy.
 
 Notice the following kinds of constraints:
 
@@ -280,7 +286,7 @@ The search requires 6 things (similar to solver except no goal is required):
 
 It is common to set up the inference algorithm in this pattern:
 
-```rust
+```ignore
 fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
     let can_add = |new_expr: &Expr| {
         !cache.contains(new_expr) &&

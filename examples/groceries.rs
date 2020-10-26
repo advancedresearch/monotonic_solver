@@ -105,7 +105,7 @@ fn main() {
     let res = search(
         &start,
         |expr| if let &Buy(x, y) = expr {if x == person {Some(y)} else {None}} else {None},
-        1000, // max proof size.
+        Some(1000), // max proof size.
         &[],
         &order_constraints,
         infer,
