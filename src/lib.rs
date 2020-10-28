@@ -339,13 +339,14 @@ impl<'a, T, A> Solver<'a, T, A> where T: Hash + Eq {
 }
 
 /// Solves without reducing.
-pub fn solve<T: Clone + PartialEq + Eq + Hash>(
+pub fn solve_with_accelerator<T: Clone + PartialEq + Eq + Hash, A>(
     start: &[T],
     goal: &[T],
     max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
-    infer: fn(Solver<T>, story: &[T]) -> Option<T>
+    infer: fn(Solver<T, A>, story: &[T]) -> Option<T>,
+    accelerator: &mut A,
 ) -> (Vec<T>, Result<(), Error>) {
     let mut cache = HashSet::new();
     for s in start {
@@ -378,7 +379,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
         let expr = if let Some(expr) = infer(Solver {
                 cache: &cache,
                 filter_cache: &filter_cache,
-                accelerator: &mut ()
+                accelerator,
             }, &res) {
             expr
         } else {
@@ -395,16 +396,33 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
     (res, Ok(()))
 }
 
+/// Solves without reducing.
+pub fn solve<T: Clone + PartialEq + Eq + Hash>(
+    start: &[T],
+    goal: &[T],
+    max_size: Option<usize>,
+    filter: &[T],
+    order_constraints: &[(T, T)],
+    infer: fn(Solver<T>, story: &[T]) -> Option<T>
+) -> (Vec<T>, Result<(), Error>) {
+    solve_with_accelerator(start, goal, max_size, filter, order_constraints, infer, &mut ())
+}
+
+
 /// Solves and reduces the proof to those steps that are necessary.
-pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
+///
+/// Uses an accelerator constructor initalized from start and goal.
+pub fn solve_and_reduce_with_accelerator<T: Clone + PartialEq + Eq + Hash, A>(
     start: &[T],
     goal: &[T],
     mut max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
-    infer: fn(Solver<T>, story: &[T]) -> Option<T>
+    infer: fn(Solver<T, A>, story: &[T]) -> Option<T>,
+    accelerator: fn(&[T], &[T]) -> A,
 ) -> (Vec<T>, Result<(), Error>) {
-    let (mut res, status) = solve(start, goal, max_size, filter, order_constraints, infer);
+    let (mut res, status) = solve_with_accelerator(start, goal, max_size, filter,
+        order_constraints, infer, &mut accelerator(start, goal));
     if status.is_err() {return (res, status)};
 
     // Check that every step is necessary.
@@ -417,7 +435,8 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
 
             new_filter.push(res[i].clone());
 
-            if let (solution, Ok(())) = solve(start, goal, max_size, &new_filter, order_constraints, infer) {
+            if let (solution, Ok(())) = solve_with_accelerator(start, goal, max_size,
+                &new_filter, order_constraints, infer, &mut accelerator(start, goal)) {
                 if solution.len() < res.len() &&
                    solution.iter().all(|e| res.iter().any(|f| e == f))
                 {
@@ -436,6 +455,19 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
     (res, Ok(()))
 }
 
+/// Solves and reduces the proof to those steps that are necessary.
+pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
+    start: &[T],
+    goal: &[T],
+    max_size: Option<usize>,
+    filter: &[T],
+    order_constraints: &[(T, T)],
+    infer: fn(Solver<T>, story: &[T]) -> Option<T>
+) -> (Vec<T>, Result<(), Error>) {
+    solve_and_reduce_with_accelerator(start, goal, max_size, filter,
+                                      order_constraints, infer, |_, _| ())
+}
+
 /// Searches for matches by a pattern.
 ///
 /// - `pat` specifies the map and acceptance criteria
@@ -443,13 +475,14 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
 ///
 /// Returns `Ok` if all rules where exausted.
 /// Returns `Err` if the maximum size of proof was exceeded.
-pub fn search<T, F, U>(
+pub fn search_with_accelerator<T, F, U, A>(
     start: &[T],
     pat: F,
     max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
-    infer: fn(Solver<T>, story: &[T]) -> Option<T>
+    infer: fn(Solver<T, A>, story: &[T]) -> Option<T>,
+    accelerator: &mut A,
 ) -> (Vec<U>, Result<(), Error>)
     where T: Clone + PartialEq + Eq + Hash,
           F: Fn(&T) -> Option<U>
@@ -490,7 +523,7 @@ pub fn search<T, F, U>(
         let expr = if let Some(expr) = infer(Solver {
                 cache: &cache,
                 filter_cache: &filter_cache,
-                accelerator: &mut (),
+                accelerator,
             }, &res) {
             expr
         } else {
@@ -511,4 +544,25 @@ pub fn search<T, F, U>(
 
     }
     (matches, Err(Error::MaxSize))
+}
+
+/// Searches for matches by a pattern.
+///
+/// - `pat` specifies the map and acceptance criteria
+/// - `max_size` specifies the maximum size of proof
+///
+/// Returns `Ok` if all rules where exausted.
+/// Returns `Err` if the maximum size of proof was exceeded.
+pub fn search<T, F, U>(
+    start: &[T],
+    pat: F,
+    max_size: Option<usize>,
+    filter: &[T],
+    order_constraints: &[(T, T)],
+    infer: fn(Solver<T>, story: &[T]) -> Option<T>
+) -> (Vec<U>, Result<(), Error>)
+    where T: Clone + PartialEq + Eq + Hash,
+          F: Fn(&T) -> Option<U>
+{
+    search_with_accelerator(start, pat, max_size, filter, order_constraints, infer, &mut ())
 }
