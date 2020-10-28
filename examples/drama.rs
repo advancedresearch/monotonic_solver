@@ -3,9 +3,8 @@
 extern crate monotonic_solver;
 
 use std::fmt;
-use std::collections::HashSet;
 
-use monotonic_solver::solve_and_reduce;
+use monotonic_solver::{solve_and_reduce, Solver};
 
 use Person::*;
 use Expr::*;
@@ -160,12 +159,7 @@ impl fmt::Display for Expr {
     }
 }
 
-fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
-    let can_add = |new_expr: &Expr| {
-        !cache.contains(new_expr) &&
-        !filter_cache.contains(new_expr)
-    };
-
+fn infer(solver: Solver<Expr>, story: &[Expr]) -> Option<Expr> {
     /*
     let people = &[
         Alice, Bob, Cecil, Dan, Erica, Filip,
@@ -180,106 +174,106 @@ fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) ->
     for expr in story {
         if let &HadChild {father, mother, ..} = expr {
             let new_expr = Married {man: father, woman: mother};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &Married {man, woman} = expr {
             let new_expr = FellInLove {man, woman};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &FellInLove {man, woman} = expr {
             let new_expr = RomanticDinner {man, woman};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
 
             for place in places {
-                if cache.contains(&WasWorking {person: man, place: *place}) ||
-                   cache.contains(&WasWorking {person: woman, place: *place}) {
+                if solver.cache.contains(&WasWorking {person: man, place: *place}) ||
+                   solver.cache.contains(&WasWorking {person: woman, place: *place}) {
                     let new_expr = MetEachOther {man, woman, at: *place};
-                    if can_add(&new_expr) {return Some(new_expr);}
+                    if solver.can_add(&new_expr) {return Some(new_expr);}
                 }
             }
         }
 
         if let &WasWorking {person, place} = expr {
             let new_expr = GotJob {person, place};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &GotJob {person, place} = expr {
             let new_expr = AppliedForJob {person, place};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &DiedOfCancer(person) = expr {
             let new_expr = GotCancer(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
 
             let new_expr = HadToStayInBedBecauseOfIllness(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &GotCancer(person) = expr {
             let new_expr = GotSick(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &HadToStayInBedBecauseOfIllness(person) = expr {
             let new_expr = GotSick(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &GotSick(person) = expr {
             let new_expr = FeltIll(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &WasWorking {person, ..} = expr {
-            if cache.contains(&DiedInCarAccident(person)) {
+            if solver.cache.contains(&DiedInCarAccident(person)) {
                 let new_expr = DroveCarToWork(person);
-                if can_add(&new_expr) {return Some(new_expr);}
+                if solver.can_add(&new_expr) {return Some(new_expr);}
             }
         }
 
         if let &DroveCarToWork(person) = expr {
             let new_expr = OwnedCar(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &OwnedCar(person) = expr {
             let new_expr = PurchasedCar(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &PurchasedCar(person) = expr {
             let new_expr = SawAffordableCar(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &SawAffordableCar(person) = expr {
             let new_expr = WasLookingForCar(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &WasLookingForCar(person) = expr {
             let new_expr = NeededCar(person);
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &Murdered {murderer, victim, weapon} = expr {
             if weapon.shoots() {
                 let new_expr = Shot {attacker: murderer, target: victim, weapon};
-                if can_add(&new_expr) {return Some(new_expr);}
+                if solver.can_add(&new_expr) {return Some(new_expr);}
             }
         }
 
         if let &Shot {attacker, target, weapon} = expr {
             let new_expr = PulledTrigger {person: attacker, weapon};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
 
-            if cache.contains(&PulledTrigger {person: attacker, weapon}) {
+            if solver.cache.contains(&PulledTrigger {person: attacker, weapon}) {
                 let new_expr = Aimed {aimer: attacker, target, weapon};
-                if can_add(&new_expr) {return Some(new_expr);}
+                if solver.can_add(&new_expr) {return Some(new_expr);}
             }
         }
     }

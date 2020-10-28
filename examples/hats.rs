@@ -24,9 +24,7 @@ solver to test the game logic, which does not need optimization.
 
 extern crate monotonic_solver;
 
-use monotonic_solver::{solve, solve_and_reduce};
-
-use std::collections::HashSet;
+use monotonic_solver::{solve, solve_and_reduce, Solver};
 
 use Expr::*;
 use Person::*;
@@ -116,12 +114,7 @@ pub enum Expr {
     HaveWorn(Person, Hat),
 }
 
-fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
-    let can_add = |new_expr: &Expr| {
-        !cache.contains(new_expr) &&
-        !filter_cache.contains(new_expr)
-    };
-
+fn infer(solver: Solver<Expr>, story: &[Expr]) -> Option<Expr> {
     let ref mut world = World::new();
 
     // Execute expressions on world.
@@ -167,10 +160,10 @@ fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) ->
         if let Some(person) = Person::from(i as u8) {
             if let Some(hat) = world.wears[i] {
                 let new_expr = Wears(person, hat);
-                if can_add(&new_expr) {return Some(new_expr)};
+                if solver.can_add(&new_expr) {return Some(new_expr)};
             } else {
                 let new_expr = WearsNoHat(person);
-                if can_add(&new_expr) {return Some(new_expr)};
+                if solver.can_add(&new_expr) {return Some(new_expr)};
             }
         }
     }
@@ -181,7 +174,7 @@ fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) ->
                 if let Some(person) = Person::from(i as u8) {
                     if let Some(hat) = Hat::from(j as u8) {
                         let new_expr = HaveWorn(person, hat);
-                        if can_add(&new_expr) {return Some(new_expr)};
+                        if solver.can_add(&new_expr) {return Some(new_expr)};
                     }
                 }
             }
