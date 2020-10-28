@@ -1,8 +1,6 @@
 extern crate monotonic_solver;
 
-use monotonic_solver::search;
-
-use std::collections::HashSet;
+use monotonic_solver::{search, Solver};
 
 use Expr::*;
 use Fruit::*;
@@ -62,11 +60,7 @@ pub enum Expr {
     Buy(Person, Fruit),
 }
 
-fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
-    let can_add = |new_expr: &Expr| {
-        !cache.contains(new_expr) &&
-        !filter_cache.contains(new_expr)
-    };
+fn infer(solver: Solver<Expr>, story: &[Expr]) -> Option<Expr> {
     for expr in story {
         if let &Preference(x, taste1, taste2) = expr {
             for expr2 in story {
@@ -74,7 +68,7 @@ fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) ->
                     // Both tastes must be satisfied for the fruit.
                     if taste1.likes(y) && taste2.likes(y) {
                         let new_expr = Buy(x, y);
-                        if can_add(&new_expr) {return Some(new_expr)};
+                        if solver.can_add(&new_expr) {return Some(new_expr)};
                     }
                 }
             }

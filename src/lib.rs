@@ -67,9 +67,7 @@
 //! ```rust
 //! extern crate monotonic_solver;
 //!
-//! use monotonic_solver::search;
-//!
-//! use std::collections::HashSet;
+//! use monotonic_solver::{search, Solver};
 //!
 //! use Expr::*;
 //! use Fruit::*;
@@ -129,11 +127,7 @@
 //!     Buy(Person, Fruit),
 //! }
 //!
-//! fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
-//!     let can_add = |new_expr: &Expr| {
-//!         !cache.contains(new_expr) &&
-//!         !filter_cache.contains(new_expr)
-//!     };
+//! fn infer(solver: Solver<Expr>, story: &[Expr]) -> Option<Expr> {
 //!     for expr in story {
 //!         if let &Preference(x, taste1, taste2) = expr {
 //!             for expr2 in story {
@@ -141,7 +135,7 @@
 //!                     // Both tastes must be satisfied for the fruit.
 //!                     if taste1.likes(y) && taste2.likes(y) {
 //!                         let new_expr = Buy(x, y);
-//!                         if can_add(&new_expr) {return Some(new_expr)};
+//!                         if solver.can_add(&new_expr) {return Some(new_expr)};
 //!                     }
 //!                 }
 //!             }
@@ -286,12 +280,7 @@
 //! It is common to set up the inference algorithm in this pattern:
 //!
 //! ```ignore
-//! fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
-//!     let can_add = |new_expr: &Expr| {
-//!         !cache.contains(new_expr) &&
-//!         !filter_cache.contains(new_expr)
-//!     };
-//!
+//! fn infer(solver: Solver<Expr>, story: &[Expr]) -> Option<Expr> {
 //!     let places = &[
 //!         University, CoffeeBar
 //!     ];
@@ -299,12 +288,12 @@
 //!     for expr in story {
 //!         if let &HadChild {father, mother, ..} = expr {
 //!             let new_expr = Married {man: father, woman: mother};
-//!             if can_add(&new_expr) {return Some(new_expr);}
+//!             if solver.can_add(&new_expr) {return Some(new_expr);}
 //!         }
 //!
 //!         if let &Married {man, woman} = expr {
 //!             let new_expr = FellInLove {man, woman};
-//!             if can_add(&new_expr) {return Some(new_expr);}
+//!             if solver.can_add(&new_expr) {return Some(new_expr);}
 //!         }
 //!
 //!         ...
@@ -313,7 +302,7 @@
 //! }
 //! ```
 //!
-//! The `can_add` closure checks whether the fact is already inferred.
+//! The `solver.can_add` call checks whether the fact is already inferred.
 //! It is also common to create lists of items to iterate over,
 //! and use it in combination with the cache to improve performance of lookups.
 
@@ -329,6 +318,26 @@ pub enum Error {
     MaxSize,
 }
 
+/// Solver argument to inference function.
+pub struct Solver<'a, T, A = ()> {
+    /// A hash set used check whether a fact has been inferred.
+    pub cache: &'a HashSet<T>,
+    /// A filter cache to filter out facts deliberately.
+    ///
+    /// This is used to e.g. reduce proofs automatically.
+    pub filter_cache: &'a HashSet<T>,
+    /// Stores acceleration data structures, reused monotonically.
+    pub accelerator: &'a mut A,
+}
+
+impl<'a, T, A> Solver<'a, T, A> where T: Hash + Eq {
+    /// Returns `true` if new expression can be added to facts.
+    pub fn can_add(&self, new_expr: &T) -> bool {
+        !self.cache.contains(new_expr) &&
+        !self.filter_cache.contains(new_expr)
+    }
+}
+
 /// Solves without reducing.
 pub fn solve<T: Clone + PartialEq + Eq + Hash>(
     start: &[T],
@@ -336,7 +345,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
     max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
-    infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
+    infer: fn(Solver<T>, story: &[T]) -> Option<T>
 ) -> (Vec<T>, Result<(), Error>) {
     let mut cache = HashSet::new();
     for s in start {
@@ -366,7 +375,11 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
             filter_cache.insert(order_constraints[i].1.clone());
         }
 
-        let expr = if let Some(expr) = infer(&cache, &filter_cache, &res) {
+        let expr = if let Some(expr) = infer(Solver {
+                cache: &cache,
+                filter_cache: &filter_cache,
+                accelerator: &mut ()
+            }, &res) {
             expr
         } else {
             return (res, Err(Error::Failure));
@@ -389,7 +402,7 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
     mut max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
-    infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
+    infer: fn(Solver<T>, story: &[T]) -> Option<T>
 ) -> (Vec<T>, Result<(), Error>) {
     let (mut res, status) = solve(start, goal, max_size, filter, order_constraints, infer);
     if status.is_err() {return (res, status)};
@@ -436,7 +449,7 @@ pub fn search<T, F, U>(
     max_size: Option<usize>,
     filter: &[T],
     order_constraints: &[(T, T)],
-    infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
+    infer: fn(Solver<T>, story: &[T]) -> Option<T>
 ) -> (Vec<U>, Result<(), Error>)
     where T: Clone + PartialEq + Eq + Hash,
           F: Fn(&T) -> Option<U>
@@ -474,7 +487,11 @@ pub fn search<T, F, U>(
             filter_cache.insert(order_constraints[i].1.clone());
         }
 
-        let expr = if let Some(expr) = infer(&cache, &filter_cache, &res) {
+        let expr = if let Some(expr) = infer(Solver {
+                cache: &cache,
+                filter_cache: &filter_cache,
+                accelerator: &mut (),
+            }, &res) {
             expr
         } else {
             return (matches, Ok(()));
