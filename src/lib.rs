@@ -169,7 +169,7 @@
 //!     // Look up what this person will buy.
 //!     let person = Peter;
 //!
-//!     let res = search(
+//!     let (res, _) = search(
 //!         &start,
 //!         |expr| if let &Buy(x, y) = expr {if x == person {Some(y)} else {None}} else {None},
 //!         Some(1000), // max proof size.
@@ -177,12 +177,9 @@
 //!         &order_constraints,
 //!         infer,
 //!     );
-//!     match res {
-//!         Ok(ref res) | Err(ref res) => {
-//!             for r in res {
-//!                 println!("{:?}", r);
-//!             }
-//!         }
+//!     println!("{:?} will buy:", person);
+//!     for r in res {
+//!         println!("- {:?}", r);
 //!     }
 //! }
 //! ```
@@ -323,6 +320,15 @@
 use std::hash::Hash;
 use std::collections::HashSet;
 
+/// Stores solver error.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Error {
+    /// Failed to reach the goal.
+    Failure,
+    /// Reached maximum proof size limit.
+    MaxSize,
+}
+
 /// Solves without reducing.
 pub fn solve<T: Clone + PartialEq + Eq + Hash>(
     start: &[T],
@@ -331,7 +337,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
     filter: &[T],
     order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
-) -> Result<Vec<T>, Vec<T>> {
+) -> (Vec<T>, Result<(), Error>) {
     let mut cache = HashSet::new();
     for s in start {
         cache.insert(s.clone());
@@ -346,7 +352,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
             break;
         }
         if let Some(n) = max_size {
-            if res.len() >= n {return Err(res)};
+            if res.len() >= n {return (res, Err(Error::MaxSize))};
         }
 
         // Modify filter to prevent violation of order-constraints.
@@ -363,7 +369,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
         let expr = if let Some(expr) = infer(&cache, &filter_cache, &res) {
             expr
         } else {
-            return Err(res);
+            return (res, Err(Error::Failure));
         };
         res.push(expr.clone());
         cache.insert(expr);
@@ -373,7 +379,7 @@ pub fn solve<T: Clone + PartialEq + Eq + Hash>(
             filter_cache.remove(&order_constraints[i].1);
         }
     }
-    Ok(res)
+    (res, Ok(()))
 }
 
 /// Solves and reduces the proof to those steps that are necessary.
@@ -384,8 +390,9 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
     filter: &[T],
     order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
-) -> Result<Vec<T>, Vec<T>> {
-    let mut res = solve(start, goal, max_size, filter, order_constraints, infer)?;
+) -> (Vec<T>, Result<(), Error>) {
+    let (mut res, status) = solve(start, goal, max_size, filter, order_constraints, infer);
+    if status.is_err() {return (res, status)};
 
     // Check that every step is necessary.
     max_size = Some(res.len());
@@ -397,7 +404,7 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
 
             new_filter.push(res[i].clone());
 
-            if let Ok(solution) = solve(start, goal, max_size, &new_filter, order_constraints, infer) {
+            if let (solution, Ok(())) = solve(start, goal, max_size, &new_filter, order_constraints, infer) {
                 if solution.len() < res.len() &&
                    solution.iter().all(|e| res.iter().any(|f| e == f))
                 {
@@ -413,7 +420,7 @@ pub fn solve_and_reduce<T: Clone + PartialEq + Eq + Hash>(
         if res.len() == old_len {break;}
     }
 
-    Ok(res)
+    (res, Ok(()))
 }
 
 /// Searches for matches by a pattern.
@@ -430,7 +437,7 @@ pub fn search<T, F, U>(
     filter: &[T],
     order_constraints: &[(T, T)],
     infer: fn(cache: &HashSet<T>, filter_cache: &HashSet<T>, story: &[T]) -> Option<T>
-) -> Result<Vec<U>, Vec<U>>
+) -> (Vec<U>, Result<(), Error>)
     where T: Clone + PartialEq + Eq + Hash,
           F: Fn(&T) -> Option<U>
 {
@@ -450,7 +457,7 @@ pub fn search<T, F, U>(
             matches.push(val);
         }
     }
-    
+
     loop {
         if let Some(n) = max_size {
             if res.len() >= n {break};
@@ -470,7 +477,7 @@ pub fn search<T, F, U>(
         let expr = if let Some(expr) = infer(&cache, &filter_cache, &res) {
             expr
         } else {
-            return Ok(matches);
+            return (matches, Ok(()));
         };
         res.push(expr.clone());
 
@@ -486,5 +493,5 @@ pub fn search<T, F, U>(
         }
 
     }
-    Err(matches)
+    (matches, Err(Error::MaxSize))
 }
