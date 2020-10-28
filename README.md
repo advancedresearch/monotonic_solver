@@ -65,9 +65,7 @@ a person will buy from the available food and taste preferences.
 ```rust
 extern crate monotonic_solver;
 
-use monotonic_solver::search;
-
-use std::collections::HashSet;
+use monotonic_solver::{search, Solver};
 
 use Expr::*;
 use Fruit::*;
@@ -127,11 +125,7 @@ pub enum Expr {
     Buy(Person, Fruit),
 }
 
-fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
-    let can_add = |new_expr: &Expr| {
-        !cache.contains(new_expr) &&
-        !filter_cache.contains(new_expr)
-    };
+fn infer(solver: Solver<Expr>, story: &[Expr]) -> Option<Expr> {
     for expr in story {
         if let &Preference(x, taste1, taste2) = expr {
             for expr2 in story {
@@ -139,7 +133,7 @@ fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) ->
                     // Both tastes must be satisfied for the fruit.
                     if taste1.likes(y) && taste2.likes(y) {
                         let new_expr = Buy(x, y);
-                        if can_add(&new_expr) {return Some(new_expr)};
+                        if solver.can_add(&new_expr) {return Some(new_expr)};
                     }
                 }
             }
@@ -167,7 +161,7 @@ fn main() {
     // Look up what this person will buy.
     let person = Peter;
 
-    let res = search(
+    let (res, _) = search(
         &start,
         |expr| if let &Buy(x, y) = expr {if x == person {Some(y)} else {None}} else {None},
         Some(1000), // max proof size.
@@ -175,12 +169,9 @@ fn main() {
         &order_constraints,
         infer,
     );
-    match res {
-        Ok(ref res) | Err(ref res) => {
-            for r in res {
-                println!("{:?}", r);
-            }
-        }
+    println!("{:?} will buy:", person);
+    for r in res {
+        println!("- {:?}", r);
     }
 }
 ```
@@ -287,12 +278,7 @@ The search requires 6 things (similar to solver except no goal is required):
 It is common to set up the inference algorithm in this pattern:
 
 ```ignore
-fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) -> Option<Expr> {
-    let can_add = |new_expr: &Expr| {
-        !cache.contains(new_expr) &&
-        !filter_cache.contains(new_expr)
-    };
-
+fn infer(solver: Solver<Expr>, story: &[Expr]) -> Option<Expr> {
     let places = &[
         University, CoffeeBar
     ];
@@ -300,12 +286,12 @@ fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) ->
     for expr in story {
         if let &HadChild {father, mother, ..} = expr {
             let new_expr = Married {man: father, woman: mother};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         if let &Married {man, woman} = expr {
             let new_expr = FellInLove {man, woman};
-            if can_add(&new_expr) {return Some(new_expr);}
+            if solver.can_add(&new_expr) {return Some(new_expr);}
         }
 
         ...
@@ -314,6 +300,6 @@ fn infer(cache: &HashSet<Expr>, filter_cache: &HashSet<Expr>, story: &[Expr]) ->
 }
 ```
 
-The `can_add` closure checks whether the fact is already inferred.
+The `solver.can_add` call checks whether the fact is already inferred.
 It is also common to create lists of items to iterate over,
 and use it in combination with the cache to improve performance of lookups.
