@@ -304,19 +304,15 @@ fn main() {
     ];
     let filter = vec![];
     let order_constraints = vec![];
-    match solve_and_reduce(&start, &goal, None, &filter, &order_constraints, infer) {
-        Ok(solution) => {
-            // for expr in solution.iter().rev() {
-            for expr in solution {
-                println!("{}", expr);
-            }
-        }
-        Err(solution) => {
-            // for expr in solution.iter().rev() {
-            for expr in solution {
-                println!("{}", expr);
-            }
-            println!("Could not solve");
-        }
+    let (solution, status) = solve_and_reduce(&start, &goal, None, &filter,
+                                              &order_constraints, infer);
+
+    // for expr in solution.iter().rev() {
+    for expr in solution {
+        println!("{}", expr);
+    }
+
+    if status.is_err() {
+        println!("Could not solve");
     }
 }

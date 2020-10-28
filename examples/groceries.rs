@@ -102,7 +102,7 @@ fn main() {
     // Look up what this person will buy.
     let person = Peter;
 
-    let res = search(
+    let (res, _) = search(
         &start,
         |expr| if let &Buy(x, y) = expr {if x == person {Some(y)} else {None}} else {None},
         Some(1000), // max proof size.
@@ -110,12 +110,8 @@ fn main() {
         &order_constraints,
         infer,
     );
-    match res {
-        Ok(ref res) | Err(ref res) => {
-            println!("{:?} will buy:", person);
-            for r in res {
-                println!("- {:?}", r);
-            }
-        }
+    println!("{:?} will buy:", person);
+    for r in res {
+        println!("- {:?}", r);
     }
 }

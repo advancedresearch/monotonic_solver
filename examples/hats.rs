@@ -280,7 +280,7 @@ pub fn check(fs: &[(fn() -> (Vec<Expr>, Vec<Expr>), bool)]) {
         let order_constraints = vec![];
 
         // Use `solve` because it's faster than reduction.
-        let res = solve(
+        let (_, status) = solve(
             &start,
             &goal,
             None,
@@ -288,7 +288,7 @@ pub fn check(fs: &[(fn() -> (Vec<Expr>, Vec<Expr>), bool)]) {
             &order_constraints,
             infer,
         );
-        if res.is_ok() != ok {
+        if status.is_ok() != ok {
             panic!("Failed check `{}`", i);
         }
     }
@@ -329,7 +329,7 @@ fn main() {
     let order_constraints = vec![
     ];
 
-    let res = solve_and_reduce(
+    let (res, status) = solve_and_reduce(
         &start,
         &goal,
         None,
@@ -337,16 +337,12 @@ fn main() {
         &order_constraints,
         infer,
     );
-    if res.is_ok() {
+    if status.is_ok() {
         println!("OK");
     } else {
         println!("ERROR");
     }
-    match res {
-        Ok(ref res) | Err(ref res) => {
-            for r in res {
-                println!("{:?}", r);
-            }
-        }
+    for r in res {
+        println!("{:?}", r);
     }
 }
